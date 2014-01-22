@@ -103,21 +103,35 @@ class TraderApp(object):
     def update(self):
         self.update_trades_window(self.c.markets["DOGE/BTC"], 15)
         self.update_history_window(self.c.markets["DOGE/BTC"], 30)
-        self.update_my_orders_window(self.c.markets["DOGE/BTC"], 30)
+        self.update_my_orders_window(self.c.markets["DOGE/BTC"], 5)
         
 
     def main_loop(self):
         """ This loop executes till the program ends """
+        mode = "watch"
+
         while True:
             self.win_trade.refresh()
             self.win_history.refresh()
             self.win_orders.refresh()
             ch = self.screen.getch()
 
-            if ch == ord('q'):
-                break
-            elif ch == ord('u'):
-                self.update()
+            if mode == "watch":
+                if ch == ord('q'):
+                    break
+                elif ch == ord('u'):
+                    self.update()
+                elif ch == ord('b'):
+                    mode = "buy"
+            else:
+                if ch == ord('q'):
+                    mode = "watch"
+                elif ch == ord('\n'):
+
+                self.screen.addch(0, 20, ch)
+
+                
+                    #self.c.place_order(self.c.markets["DOGE/BTC"], "Buy", 0.00000165, 1000) 
 
     def cleanup(self):
         pass

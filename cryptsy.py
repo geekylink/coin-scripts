@@ -1,139 +1,200 @@
 import json
 import urllib2
 import math
+import requests
+import time
+import hashlib
+import hmac
 
-class Coin:
-    diff        = None
-    code        = ""
-    name        = ""
-    amount      = 0
-    valueBTC    = 0    
-    valueUSD    = 0
-    amount      = 0
-
-    def __init__(self, name, code, value):
-        self.code = code
-        self.name = name
-        self.valueBTC = value
-
-    def set_value_BTC(self, value):
-        self.valueBTC = value
-
-    def get_value_BTC(self):
-        return self.valueBTC
-
-    def get_ticker(self):
-        return self.code
-
-    def get_name(self):
-        return self.name
+PrivateKey = ""
+PublicKey = ""
 
 class Bank:
     coins = {}
-    total = 0
 
-    def __init__(self):
-        pass
+    def add_coin(self, ticker, amount):
+        self.coins[ticker] = amount
 
-    def get_total_in_btc(self):
+    def get_coin(self, ticker):
+        return self.coins[ticker]
+
+class Order:
+    def __init__(self, price, vol, order_type = None, date = None, fee = 0):
+        self.price = price
+        self.volume = vol
+        self.order_type = order_type
+        self.date = date
+        self.fee = fee
+
+    def volume_in_btc(self):
+        """ Returns the volume in BTC """
+        return float(self.volume)*float(self.price)
+
+class Market:
+    """ Stores data related to a market """
+    primary_code    = ""
+    secondary_code  = ""
+    marketid        = -1
+    last_trade      = 0
+    high_trade      = 0
+    low_trade       = 0
+    volume          = 0
+    sell_orders     = []
+    buy_orders      = []
+    history         = []
+    my_orders       = []
+
+    def total_buys(self):
+        """ Returns the total amount of buy orders in bitcoin """
+        return self.sum_orders(self.buy_orders)
+
+    def total_sells(self):
+        """ Returns the total amount of buy orders in bitcoin """
+        return self.sum_orders(self.sell_orders)
+
+    def total_buys_above(self, amount):
+        """ Returns the total amount of buy orders above amount in bitcoin """
         total = 0
-        for c in self.coins:
-            val = float(self.get_btc_value(c))
-            amount = float(self.get_amount(c))
-            total += val*amount
+        for order in self.buy_orders:
+            if float(order.price) >= float(amount):
+                total += float(order.price)*float(order.volume)
+        return total
+                
+    def total_sells_below(self, amount):
+        """ Returns the total amount of buy orders above amount in bitcoin """
+        total = 0
+        for order in self.sell_orders:
+            if float(order.price) <= float(amount):
+                total += float(order.price)*float(order.volume)
+        return total
+                
 
+    def sum_orders(self, orders):
+        total = 0
+        for order in orders:
+            total += float(order.price)*float(order.volume)
         return total
 
-    def get_total_in_USD(self):
-        pass
-
-    def get_btc_value(self, code):
-        return self.coins[code].valueBTC
-   
-    def get_amount(self, code):
-        return self.coins[code].amount
-
-    def add_coins(self, code, amount):
-        self.coins[code].amount += amount
-
-    def add_new_coin(self, code, coin):
-        assert code not in self.coins
-        self.coins[code] = coin
-
-    def has_coin(self, code):
-        return code in self.coins
-            
 class Cryptsy:
-    data = "" 
+    bank = None
+    markets = {} # Sorted by label "primary/secondary"
 
-    def load_from_file(self, filename):
-        """ Loads the data for this exchange from a file """
-        f = open(filename, 'r')
-        self.data = json.loads(f.read())
+    def __init__(self):
+        self.bank = Bank()
 
-        return self.is_success()
+    def update_balance(self):
+        """ Updates the balances for each coin """
+        resp = self.api_query("getinfo")
+        coins = resp["return"]["balances_available"]
 
-    def load(self):
-        """ Loads from online """
-        # Only one line
-        for line in urllib2.urlopen("http://pubapi.cryptsy.com/api.php?method=singlemarketdata&marketid=132"):
-            self.data = json.loads(line)
-            break
+        for c in coins:
+            if float(coins[c]) > 0.0:
+                self.bank.add_coin(c, coins[c])
 
-        return self.is_success()
+    def get_bank(self):
+        """ Returns this bank object """
+        return self.bank
 
-    def is_success(self):
-        """ Returns True if the data is successfully loaded """ 
-        return self.data["success"] == 1
+    def update_markets(self):
+        """ Updates every market """
+        resp = self.api_query("getmarkets")
+        markets = resp["return"]
 
-    def add_all_coins(self, bank):
-        coins = self.get_trade_for("BTC")
-        for coin in coins:
-            bank.add_new_coin(coin, Coin("$", coin, self.get_last_btc_value(coin)))
+        for m in markets:
+            new_market = Market()
+            new_market.primary_code = m["primary_currency_code"]
+            new_market.secondary_code = m["secondary_currency_code"]
+            new_market.marketid = m["marketid"]
+            new_market.last_trade = m["last_trade"]
+            new_market.high_trade = m["high_trade"]
+            new_market.low_trade = m["low_trade"]
+            new_market.volume = m["current_volume"]
 
-    def get_last_btc_value(self, code):
-        s = code + "/BTC"
-        return self.get_last_trade_price(s)
+            self.markets[m["label"]] = new_market
 
-    def get_last_trade_price(self, ticker):
-        """ Gets the last trade price  """
+    def update_orders_by_market(self, market):
+        """ Gets the current open orders on this market """
+        resp = self.api_query("marketorders", {"marketid": market.marketid})
 
-        markets = self.data["return"]["markets"]
+        buy_orders = resp["return"]["buyorders"]
+        sell_orders = resp["return"]["sellorders"]
 
-        for market in markets:
-            if market == ticker:
-                return markets[ticker]["lasttradeprice"]
+        market.buy_orders = []
+        market.sell_orders = []
 
-        return None
+        for buy in buy_orders:
+            order = Order(buy["buyprice"], buy["quantity"])
+            market.buy_orders.append(order)
 
-    def get_trade_for(self, code):
-        """ Returns all coins that can be traded for this one """
-        codes = []
-        markets = self.data["return"]["markets"]
+        for sell in sell_orders:
+            order = Order(sell["sellprice"], sell["quantity"])
+            market.sell_orders.append(order)
 
-        for market in markets:
-            m = markets[market]
+        #print "24hr high:\t", market.high_trade, "\tlow:\t", market.low_trade
+        #print "Last buy:\t", market.buy_orders[0].price, "\tsell:\t", market.sell_orders[0].price
 
-            if m["primarycode"] == code:
-                codes.append(m["secondarycode"])
-            elif m["secondarycode"] == code:
-                codes.append(m["primarycode"])
+        #print "Volume (@ask)\tbuy:\t", market.total_buys_above(float(market.buy_orders[0].price)), "\tsell:\t", market.total_sells_below(float(market.sell_orders[0].price))
 
-        return codes
+        #for i in range(0, 15):
+        #    print "Volume ", i ,"sato\tbuy:\t", market.total_buys_above(float(market.buy_orders[0].price) - 0.00000001*i), "\tsell:\t", market.total_sells_below(float(market.sell_orders[0].price) + 0.00000001*i)
 
-b = Bank()
-c = Cryptsy()
-c.load_from_file("dummy2")
-c.add_all_coins(b)
+        #print "Volume (24hr)\tbuy:\t", market.total_buys_above(market.low_trade), "\tsell:\t", market.total_sells_below(market.high_trade)
+        #print "Volume (total)\tbuy:\t", market.total_buys(), "\tsell:\t", market.total_sells()
 
-print b.get_btc_value("DOGE")
-b.add_coins("DOGE", 164000)
-print b.get_amount("DOGE")
+    def update_trade_history(self, market):
+        """ Gets the last 1000 trades for this market """
+        resp = self.api_query("markettrades", {"marketid": market.marketid})
 
-print b.get_total_in_btc(), "BTC"
+        market.history = []
+        for trade in resp["return"]:
+            order = Order(trade["tradeprice"], trade["quantity"], trade["initiate_ordertype"], trade["datetime"]) 
+            market.history.append(order)
 
-#for coin in b.coins:
-    #print b.coins[coin].code, b.coins[coin].valueBTC
-#c.load()
-#print c.get_last_trade_price("DOGE/BTC") 
-#print c.get_trade_for("DOGE")
+    def update_my_open_orders(self, market):
+        """ Gets our current orders on the market  """
+        resp = self.api_query("myorders", {"marketid": market.marketid})
+
+        market.my_orders = []
+        for order in resp["return"]:
+            o = Order(order["price"], order["quantity"], order["ordertype"], order["created"])
+            market.my_orders.append(o)
+        
+    def place_order(self, market, order_type, price, quantity):
+        resp = self.api_query("createorder", {"marketid": market.marketid, "ordertype": order_type, "quantity": quantity, "price": price})
+
+        print resp
+
+
+    def build_sign(self, args):
+        """ Builds an appropriate signed message (sha512) given the parameters """
+        res = ""
+
+        for para in args:
+            res = res + str(para) + "=" + str(args[para]) + "&"
+
+        res = res[0:len(res)-1] 
+
+        return hmac.new(PrivateKey, res, hashlib.sha512).hexdigest()
+
+    def api_query(self, method, args = {}):
+        """ Runs an api function call on cryptsy """
+        par = {"nonce": int(time.time()), "method": method}
+
+        # Append additional input args
+        for a in args:
+            par[a] = args[a]
+
+        sign = self.build_sign(par)
+        head = {"Sign": sign, "Key": PublicKey} 
+    
+        r = requests.post("https://www.cryptsy.com/api", data=par, headers=head)
+        data = json.loads(r.text)
+
+        # errors can happen
+        if data["success"] != "1":
+            print "ERROR: an api call failed."
+            # Probably should throw something...
+            return None
+
+        return data
+
