@@ -102,18 +102,25 @@ class TraderApp(object):
         
     def update(self):
         self.update_trades_window(self.c.markets["DOGE/BTC"], 15)
+        self.win_trade.refresh()
         self.update_history_window(self.c.markets["DOGE/BTC"], 30)
+        self.win_history.refresh()
         self.update_my_orders_window(self.c.markets["DOGE/BTC"], 5)
         
 
     def main_loop(self):
         """ This loop executes till the program ends """
         mode = "watch"
+        strBuild = ""
+        strPrice = ""
+        strAmount = ""
+        col_num = 20
 
         while True:
             self.win_trade.refresh()
             self.win_history.refresh()
             self.win_orders.refresh()
+            self.screen.addstr(0, 15, "m:" + mode + "   ")
             ch = self.screen.getch()
 
             if mode == "watch":
@@ -122,15 +129,47 @@ class TraderApp(object):
                 elif ch == ord('u'):
                     self.update()
                 elif ch == ord('b'):
-                    mode = "buy"
-            else:
+                    mode = "Buy"
+                    self.screen.addstr(0, 43, "P:")
+                elif ch == ord('s'):
+                    mode = "Sell"
+                    self.screen.addstr(0, 43, "P:")
+            else: # Buy mode
                 if ch == ord('q'):
+                    self.screen.addstr(0, 43, "                                     ")
+                    self.screen.addstr(0, 80, "Canceled order.                                    ")
                     mode = "watch"
+
                 elif ch == ord('\n'):
-                    pass
+                    col_num = 20
+                    self.screen.addstr(0, col_num, "                       ")
+                    if strPrice == "":
+                        self.screen.addstr(0, 43, "A:                        ")
+                        strPrice = strBuild
+                    elif strAmount == "":
+                        strAmount = strBuild
+                        self.screen.addstr(0, 80, mode + " at " + strPrice + " for " + strAmount + ". Hit enter again to place.")
+                    else:
+                        res = self.c.place_order(self.c.markets["DOGE/BTC"], mode, strPrice, strAmount)
 
-                self.screen.addch(0, 20, ch)
+                        self.screen.addstr(0, 43, "                             ")
 
+                        if res:
+                            self.screen.addstr(0, 80, "Order has been placed.                                    ")
+                        else:
+                            self.screen.addstr(0, 80, "Could not place order at this time.                       ")
+                            
+                        strPrice = strAmount = ""
+                        mode = "watch"
+                        self.update_my_orders_window(self.c.markets["DOGE/BTC"], 5)
+
+                    strBuild = ""
+                    continue
+                    
+                self.screen.addch(0, col_num, ch)
+                strBuild = str(strBuild) + chr(ch)
+                self.screen.addstr(0, 45, strBuild)
+                col_num += 1
                 
                     #self.c.place_order(self.c.markets["DOGE/BTC"], "Buy", 0.00000165, 1000) 
 

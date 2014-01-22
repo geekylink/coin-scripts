@@ -85,6 +85,7 @@ class Cryptsy:
     def update_balance(self):
         """ Updates the balances for each coin """
         resp = self.api_query("getinfo")
+
         coins = resp["return"]["balances_available"]
 
         for c in coins:
@@ -160,9 +161,13 @@ class Cryptsy:
             market.my_orders.append(o)
         
     def place_order(self, market, order_type, price, quantity):
-        resp = self.api_query("createorder", {"marketid": market.marketid, "ordertype": order_type, "quantity": quantity, "price": price})
+        try:
+            resp = self.api_query("createorder", {"marketid": market.marketid, "ordertype": order_type, "quantity": quantity, "price": price})
+        except e:
+            return False
 
-        print resp
+        return True
+
 
 
     def build_sign(self, args):
@@ -192,9 +197,7 @@ class Cryptsy:
 
         # errors can happen
         if data["success"] != "1":
-            print "ERROR: an api call failed."
-            # Probably should throw something...
-            return None
+            raise Exception("API Query failed:" + r.text) 
 
         return data
 
