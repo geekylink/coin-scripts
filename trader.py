@@ -127,6 +127,7 @@ class TraderApp(object):
                 if ch == ord('q'):
                     mode = "watch"
                 elif ch == ord('\n'):
+                    pass
 
                 self.screen.addch(0, 20, ch)
 
