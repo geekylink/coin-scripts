@@ -170,8 +170,8 @@ class TraderApp(object):
         self.c = Cryptsy()
         self.c.update_markets()
         self.update()
-        self.windows["balance"].update(self.c)
         self.windows["my_orders"].update(self.c, self.c.markets["DOGE/BTC"])
+        self.windows["balance"].update(self.c)
         self.windows["my_history"].update(self.c, self.c.markets["DOGE/BTC"])
         
     def update(self):
@@ -199,6 +199,10 @@ class TraderApp(object):
                     break
                 elif ch == ord('u'):
                     self.update()
+                elif ch == ord('o'):
+                    self.windows["my_orders"].update(self.c, self.c.markets["DOGE/BTC"])
+                    self.windows["balance"].update(self.c)
+                    self.windows["my_history"].update(self.c, self.c.markets["DOGE/BTC"])
                 elif ch == ord('b'):
                     mode = "Buy"
                     self.screen.addstr(0, 43, "P:")
