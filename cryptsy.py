@@ -43,6 +43,7 @@ class Market:
     buy_orders      = []
     history         = []
     my_orders       = []
+    my_history      = []
 
     def total_buys(self):
         """ Returns the total amount of buy orders in bitcoin """
@@ -131,17 +132,6 @@ class Cryptsy:
             order = Order(sell["sellprice"], sell["quantity"])
             market.sell_orders.append(order)
 
-        #print "24hr high:\t", market.high_trade, "\tlow:\t", market.low_trade
-        #print "Last buy:\t", market.buy_orders[0].price, "\tsell:\t", market.sell_orders[0].price
-
-        #print "Volume (@ask)\tbuy:\t", market.total_buys_above(float(market.buy_orders[0].price)), "\tsell:\t", market.total_sells_below(float(market.sell_orders[0].price))
-
-        #for i in range(0, 15):
-        #    print "Volume ", i ,"sato\tbuy:\t", market.total_buys_above(float(market.buy_orders[0].price) - 0.00000001*i), "\tsell:\t", market.total_sells_below(float(market.sell_orders[0].price) + 0.00000001*i)
-
-        #print "Volume (24hr)\tbuy:\t", market.total_buys_above(market.low_trade), "\tsell:\t", market.total_sells_below(market.high_trade)
-        #print "Volume (total)\tbuy:\t", market.total_buys(), "\tsell:\t", market.total_sells()
-
     def update_trade_history(self, market):
         """ Gets the last 1000 trades for this market """
         resp = self.api_query("markettrades", {"marketid": market.marketid})
@@ -159,6 +149,16 @@ class Cryptsy:
         for order in resp["return"]:
             o = Order(order["price"], order["quantity"], order["ordertype"], order["created"])
             market.my_orders.append(o)
+
+    def update_my_history(self, market):
+        """ Gets the our last trades """
+        resp = self.api_query("mytrades", {"marketid": market.marketid})
+
+        market.my_history = []
+        for trade in resp["return"]:
+            order = Order(trade["tradeprice"], trade["quantity"], trade["tradetype"], trade["datetime"])
+            market.my_history.append(order)
+        
         
     def place_order(self, market, order_type, price, quantity):
         try:
@@ -167,8 +167,6 @@ class Cryptsy:
             return False
 
         return True
-
-
 
     def build_sign(self, args):
         """ Builds an appropriate signed message (sha512) given the parameters """

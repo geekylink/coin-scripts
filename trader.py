@@ -27,7 +27,8 @@ class Window(object):
 
     def add_line(self, line):
         """ Adds a line to the window """
-        self.window.addstr(self.line_no, 2, line)
+        height, width = self.window.getmaxyx()
+        self.window.addstr(self.line_no, 2, line[:width-4])
         self.line_no += 1
 
     def clear_lines(self):
@@ -73,7 +74,8 @@ class MyOrdersWindow(Window):
         # Display active orders
         limit = min(len(market.my_orders), limit)
         for i in range(0, limit):
-            s = market.my_orders[i].order_type + " " + str(market.my_orders[i].date)[14:] + " : " + market.my_orders[i].price + " : " + str(market.my_orders[i].volume_in_btc()) 
+            s = market.my_orders[i].order_type + " " + str(market.my_orders[i].date)[14:] + " : " + market.my_orders[i].price + " : " + str(market.my_orders[i].volume_in_btc())[0:7] 
+            s = s + " : " + str(market.my_orders[i].volume)[0:10]
             self.add_line(s)
 
         self.window.refresh()
@@ -90,7 +92,8 @@ class HistoryWindow(Window):
     
         # display history
         for i in range(0, limit):
-            s = "" + str(market.history[i].date)[14:] + " : " + market.history[i].price + " : " + str(market.history[i].volume_in_btc())
+            s = "" + str(market.history[i].date)[14:] + " : " + market.history[i].price + " : " + str(market.history[i].volume_in_btc())[0:7]
+            s += " : " + str(market.history[i].volume)
             self.add_line(s)
 
         self.window.refresh()
@@ -106,35 +109,52 @@ class TradeWindow(Window):
 
         # Displays sells
         for i in range(0, limit):
-            s = "" + market.sell_orders[limit-i].price + " : " + str(market.sell_orders[limit-i].volume_in_btc())
+            s = "" + market.sell_orders[limit-i].price + " : " + str(market.sell_orders[limit-i].volume_in_btc())[0:7]
+            s += " : " + str(market.sell_orders[limit-i].volume)
             self.add_line(s)
 
         self.add_line("")
 
         # Displays buys
         for i in range(0, limit):
-            s = "" + market.buy_orders[i].price + " : " + str(market.buy_orders[i].volume_in_btc())
+            s = "" + market.buy_orders[i].price + " : " + str(market.buy_orders[i].volume_in_btc())[0:7]
+            s += " : " + str(market.buy_orders[limit-i].volume)
             self.add_line(s)
 
         self.window.refresh()
 
+class MyHistoryWindow(Window):
+
+    def update(self, c, market):
+        limit = 12
+        self.set_title("Loading...")
+        c.update_my_history(market)
+        self.clear_lines()
+        self.set_title("My last trades")
+
+        limit = min(len(market.my_history), limit)
+        for i in range(0, limit):
+            s = market.my_history[i].order_type + " " + market.my_history[i].price + " : " + str(market.my_history[i].volume_in_btc())[0:7]
+            s += " : " + str(market.my_history[i].volume)
+            self.add_line(s)
+
+        self.window.refresh()
 
 class TraderApp(object):
     windows = {}
 
     def __init__(self, stdscr):
         self.screen = stdscr
-        #self.window = self.screen.subwin(0,0)
-        #self.window.keypad(1)
         curses.curs_set(0)
 
         self.screen.addstr("Tradesy v0")
         self.screen.refresh()
     
-        self.windows["trade"] = TradeWindow(0, 1, 35, 34)
-        self.windows["history"] = HistoryWindow(35, 1, 45, 34)
-        self.windows["my_orders"] = MyOrdersWindow(80, 1, 45, 10)
-        self.windows["balance"] = BalanceWindow(80, 11, 45, 10)
+        self.windows["trade"] = TradeWindow(0, 1, 40, 34)
+        self.windows["history"] = HistoryWindow(41, 1, 50, 34)
+        self.windows["my_orders"] = MyOrdersWindow(91, 1, 50, 10)
+        self.windows["balance"] = BalanceWindow(91, 11, 50, 10)
+        self.windows["my_history"] = MyHistoryWindow(91, 21, 50, 14)
 
         #self.panel = panel.new_panel(w2)
         #self.panel.show()
@@ -152,6 +172,7 @@ class TraderApp(object):
         self.update()
         self.windows["balance"].update(self.c)
         self.windows["my_orders"].update(self.c, self.c.markets["DOGE/BTC"])
+        self.windows["my_history"].update(self.c, self.c.markets["DOGE/BTC"])
         
     def update(self):
         self.windows["trade"].update(self.c, self.c.markets["DOGE/BTC"])
@@ -166,6 +187,7 @@ class TraderApp(object):
         col_num = 20
 
         while True:
+            # Refresh all the windows
             for win in self.windows:
                 self.windows[win].window.refresh()
 
@@ -190,9 +212,16 @@ class TraderApp(object):
                     self.screen.addstr(0, 43, "                                     ")
                     self.screen.addstr(0, 80, "Canceled order.                                    ")
                     mode = "watch"
+                    continue
+
+                elif ch == 8: # Back space
+                    if len(strBuild) > 0:
+                        strBuild = strBuild[:-1]
+                        col_num -= 1
+                        self.screen.addch(0, col_num, ch)
 
                 elif ch == ord('\n'):
-                    col_num = 20
+                    col_num = 45
                     self.screen.addstr(0, col_num, "                       ")
                     if strPrice == "":
                         self.screen.addstr(0, 43, "A:                        ")
@@ -201,7 +230,7 @@ class TraderApp(object):
                         strAmount = strBuild
                         self.screen.addstr(0, 80, mode + " at " + strPrice + " for " + strAmount + ". Hit enter again to place.")
                     else:
-                        #res = self.c.place_order(self.c.markets["DOGE/BTC"], mode, strPrice, strAmount)
+                        res = self.c.place_order(self.c.markets["DOGE/BTC"], mode, strPrice, strAmount)
 
                         self.screen.addstr(0, 43, "                             ")
 
@@ -212,12 +241,11 @@ class TraderApp(object):
                             
                         strPrice = strAmount = ""
                         mode = "watch"
-                        self.update_my_orders_window(self.c.markets["DOGE/BTC"], 5)
+                        self.windows["my_orders"].update(self.c, self.c.markets["DOGE/BTC"])
 
                     strBuild = ""
                     continue
                     
-                self.screen.addch(0, col_num, ch)
                 strBuild = str(strBuild) + chr(ch)
                 self.screen.addstr(0, 45, strBuild)
                 col_num += 1
