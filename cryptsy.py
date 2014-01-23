@@ -19,11 +19,12 @@ class Bank:
         return self.coins[ticker]
 
 class Order:
-    def __init__(self, price, vol, order_type = None, date = None, fee = 0):
+    def __init__(self, price, vol, order_type = None, date = None, order_id = -1, fee = 0):
         self.price = price
         self.volume = vol
         self.order_type = order_type
         self.date = date
+        self.order_id = order_id
         self.fee = fee
 
     def volume_in_btc(self):
@@ -147,7 +148,7 @@ class Cryptsy:
 
         market.my_orders = []
         for order in resp["return"]:
-            o = Order(order["price"], order["quantity"], order["ordertype"], order["created"])
+            o = Order(order["price"], order["quantity"], order["ordertype"], order["created"], order["orderid"])
             market.my_orders.append(o)
 
     def update_my_history(self, market):
@@ -161,12 +162,18 @@ class Cryptsy:
         
         
     def place_order(self, market, order_type, price, quantity):
+        """ Places an order """
         try:
             resp = self.api_query("createorder", {"marketid": market.marketid, "ordertype": order_type, "quantity": quantity, "price": price})
+            return resp["orderid"]
         except e:
-            return False
+            pass
+        return None
 
-        return True
+    def cancel_order(self, order_id):
+        """ Cancels an order """
+        resp = self.api_query("cancelorder", {"orderid": order_id})
+
 
     def build_sign(self, args):
         """ Builds an appropriate signed message (sha512) given the parameters """

@@ -28,7 +28,7 @@ class Window(object):
     def add_line(self, line):
         """ Adds a line to the window """
         height, width = self.window.getmaxyx()
-        self.window.addstr(self.line_no, 2, line[:width-4])
+        self.window.addstr(self.line_no, 2, line[:width-5])
         self.line_no += 1
 
     def clear_lines(self):
@@ -74,7 +74,7 @@ class MyOrdersWindow(Window):
         # Display active orders
         limit = min(len(market.my_orders), limit)
         for i in range(0, limit):
-            s = market.my_orders[i].order_type + " " + str(market.my_orders[i].date)[14:] + " : " + market.my_orders[i].price + " : " + str(market.my_orders[i].volume_in_btc())[0:7] 
+            s = str(i) + " " + market.my_orders[i].order_type + " " + str(market.my_orders[i].date)[14:] + " : " + market.my_orders[i].price + " : " + str(market.my_orders[i].volume_in_btc())[0:7] 
             s = s + " : " + str(market.my_orders[i].volume)[0:10]
             self.add_line(s)
 
@@ -134,7 +134,7 @@ class MyHistoryWindow(Window):
 
         limit = min(len(market.my_history), limit)
         for i in range(0, limit):
-            s = market.my_history[i].order_type + " " + market.my_history[i].price + " : " + str(market.my_history[i].volume_in_btc())[0:7]
+            s = market.my_history[i].order_type + "\t" + str(market.my_history[i].date)[11:] + " " + market.my_history[i].price + " : " + str(market.my_history[i].volume_in_btc())[0:7]
             s += " : " + str(market.my_history[i].volume)
             self.add_line(s)
 
@@ -210,12 +210,30 @@ class TraderApp(object):
                     mode = "Sell"
                     self.screen.addstr(0, 43, "P:")
                 elif ch == ord('c'):
-                    self.windows["balance"].clear_lines()
-            else: # Buy mode
+                    mode = "cancel"
+            elif mode == "cancel":
+                if ch == ord('q'):
+                    mode = "watch"
+                    self.screen.addstr(0, 43, "                                     ")
+                    continue
+                elif ch == ord('\n'):
+                    order_num = int(strBuild)
+                    strBuild = ""
+                    order_id = self.c.markets["DOGE/BTC"].my_orders[order_num].order_id
+                    self.c.cancel_order(order_id)
+                    mode = "watch"
+                    self.screen.addstr(0, 43, "                                     ")
+                    self.screen.addstr(0, 80, "Order has been canceled.                           ")
+                else: 
+                    strBuild = str(strBuild) + chr(ch)
+                    self.screen.addstr(0, 45, strBuild)
+                    
+            else: # Buy/sell mode
                 if ch == ord('q'):
                     self.screen.addstr(0, 43, "                                     ")
                     self.screen.addstr(0, 80, "Canceled order.                                    ")
                     mode = "watch"
+                    strBuild = strAmount = strPrice = ""
                     continue
 
                 elif ch == 8: # Back space
@@ -253,7 +271,7 @@ class TraderApp(object):
                 strBuild = str(strBuild) + chr(ch)
                 self.screen.addstr(0, 45, strBuild)
                 col_num += 1
-                
+
                     #self.c.place_order(self.c.markets["DOGE/BTC"], "Buy", 0.00000165, 1000) 
 
     def cleanup(self):
